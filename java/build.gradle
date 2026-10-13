@@ -1,0 +1,36 @@
+plugins {
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.apache.avro:avro:1.12.2'
+    implementation 'org.apache.avro:avro-ipc:1.12.2'
+    implementation 'org.slf4j:slf4j-simple:2.0.18'
+}
+
+application {
+    mainClass = 'prototype.Broker'
+    applicationDefaultJvmArgs = ['-Dorg.apache.avro.SERIALIZABLE_PACKAGES=org.apache.avro.ipc']
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.named('run') {
+    jvmArgs '-Dorg.apache.avro.SERIALIZABLE_PACKAGES=org.apache.avro.ipc'
+}
+
+tasks.register('runLockManager', JavaExec) {
+    group = 'application'
+    description = 'Run the LockManager component.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'prototype.LockManager'
+    jvmArgs '-Dorg.apache.avro.SERIALIZABLE_PACKAGES=org.apache.avro.ipc'
+}

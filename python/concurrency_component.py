@@ -43,8 +43,8 @@ class ConcurrencyManager(Component):
 if __name__ == "__main__":
     lm = ConcurrencyManager(
         name="ConcurrencyManager",
-        broker_protocol_path=Path("./protocol/brocker.avpr"),
-        protocol_path=Path("./protocol/lock.avpr"),
+        broker_protocol_path=Path("../protocol/broker.avpr").absolute(),
+        protocol_path=Path("../protocol/lock.avpr").absolute(),
         broker_socket="/tmp/broker.sock",
         component_socket="/tmp/concurrency_manager.sock",
     )

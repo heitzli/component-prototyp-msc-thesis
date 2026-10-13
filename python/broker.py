@@ -127,5 +127,5 @@ class Broker:
 
 
 if __name__ == "__main__":
-    b = Broker(protocol_path=Path("protocol/brocker.avpr"))
+    b = Broker(protocol_path=Path("../protocol/broker.avpr").absolute())
     b.run()

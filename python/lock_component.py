@@ -58,8 +58,8 @@ class LockManager(Component):
 if __name__ == "__main__":
     lm = LockManager(
         name="LockManager",
-        broker_protocol_path=Path("./protocol/brocker.avpr"),
-        protocol_path=Path("./protocol/lock.avpr"),
+        broker_protocol_path=Path("../protocol/broker.avpr").absolute(),
+        protocol_path=Path("../protocol/lock.avpr").absolute(),
         broker_socket="/tmp/broker.sock",
         component_socket="/tmp/lock_manager.sock",
     )
