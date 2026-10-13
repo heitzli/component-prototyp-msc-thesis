@@ -1,0 +1,76 @@
+{
+  "messages": {
+    "requestLock": {
+      "request": [
+        {
+          "name": "request",
+          "type": "LockRequest"
+        }
+      ],
+      "response": "LockRequestResponse"
+    }
+  },
+  "namespace": "lockmanager",
+  "protocol": "LockManager",
+  "types": [
+    {
+      "default": "Exclusive",
+      "name": "LockType",
+      "symbols": [
+        "Shared",
+        "Exclusive"
+      ],
+      "type": "enum"
+    },
+    {
+      "fields": [
+        {
+          "name": "transactionID",
+          "type": "int"
+        },
+        {
+          "name": "locktype",
+          "type": "LockType"
+        },
+        {
+          "name": "dataItem",
+          "type": "string"
+        }
+      ],
+      "name": "LockRequest",
+      "type": "record"
+    },
+    {
+      "fields": [
+        {
+          "name": "transactionID",
+          "type": "int"
+        },
+        {
+          "name": "explanation",
+          "type": "string"
+        }
+      ],
+      "name": "TxAbort",
+      "type": "record"
+    },
+    {
+      "name": "LockResponse",
+      "symbols": [
+        "Ok",
+        "TxAbort"
+      ],
+      "type": "enum"
+    },
+    {
+      "fields": [
+        {
+          "name": "response",
+          "type": "LockResponse"
+        }
+      ],
+      "name": "LockRequestResponse",
+      "type": "record"
+    }
+  ]
+}

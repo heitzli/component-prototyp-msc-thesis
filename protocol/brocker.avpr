@@ -1,0 +1,73 @@
+{
+  "messages": {
+    "register": {
+      "request": [
+        {
+          "name": "request",
+          "type": "RegisterComponentRequest"
+        }
+      ],
+      "response": "RegisterComponentResponse"
+    },
+    "sendMessage": {
+      "request": [
+        {
+          "name": "message",
+          "type": "common.Message"
+        }
+      ],
+      "response": "common.Message"
+    }
+  },
+  "namespace": "broker",
+  "protocol": "Broker",
+  "types": [
+    {
+      "fields": [
+        {
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "name": "destination",
+          "type": "string"
+        },
+        {
+          "name": "correlation_id",
+          "type": "int"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ],
+      "name": "Message",
+      "namespace": "common",
+      "type": "record"
+    },
+    {
+      "fields": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "socket",
+          "type": "string"
+        }
+      ],
+      "name": "RegisterComponentRequest",
+      "type": "record"
+    },
+    {
+      "fields": [
+        {
+          "name": "result",
+          "type": "int"
+        }
+      ],
+      "name": "RegisterComponentResponse",
+      "type": "record"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+namespace common;
+
+schema Message;
+
+record Message {
+  string source;
+  string destination;
+  int correlation_id;
+  bytes payload;
+}

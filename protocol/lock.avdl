@@ -1,0 +1,29 @@
+@namespace("lockmanager")
+protocol LockManager {
+
+  enum LockType {
+    Shared, Exclusive
+  } = Exclusive;
+
+  record LockRequest {
+    int transactionID;
+    LockType locktype;
+    string dataItem;
+  }
+
+  record TxAbort {
+    int transactionID;
+    string explanation;
+  }
+
+  enum LockResponse {
+    Ok, TxAbort
+  }
+
+  record LockRequestResponse {
+    LockResponse response;
+  }
+
+  LockRequestResponse requestLock(LockRequest request);
+
+}
