@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 RequestDict: TypeAlias = dict[str, Any]
 ResultDict: TypeAlias = dict[str, Any]
 
+# TODO: broker should log all requests and responses, as should each component. form basis of "CDC" based on that info.
+
 
 class BrokerResponder(avro.ipc.Responder):
     def __init__(self, protocol: avro.protocol.Protocol, broker: Broker) -> None:
