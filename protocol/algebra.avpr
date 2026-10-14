@@ -1,0 +1,127 @@
+{
+  "messages": {
+    "optimize": {
+      "request": [
+        {
+          "name": "request",
+          "type": "OptimizeRequest"
+        }
+      ],
+      "response": "OptimizeResponse"
+    }
+  },
+  "namespace": "algebra",
+  "protocol": "AlgebraPlan",
+  "types": [
+    {
+      "fields": [
+        {
+          "name": "relation_id",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "type",
+          "type": "string"
+        }
+      ],
+      "name": "ResolvedColumn",
+      "type": "record"
+    },
+    {
+      "fields": [
+        {
+          "name": "node",
+          "type": [
+            {
+              "fields": [
+                {
+                  "name": "relation_id",
+                  "type": "string"
+                },
+                {
+                  "name": "table",
+                  "type": "string"
+                },
+                {
+                  "default": null,
+                  "name": "alias",
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              ],
+              "name": "TableScan",
+              "type": "record"
+            },
+            {
+              "fields": [
+                {
+                  "name": "columns",
+                  "type": {
+                    "items": "ResolvedColumn",
+                    "type": "array"
+                  }
+                },
+                {
+                  "name": "child",
+                  "type": "AlgebraNode"
+                }
+              ],
+              "name": "Projection",
+              "type": "record"
+            },
+            {
+              "fields": [
+                {
+                  "name": "left",
+                  "type": "AlgebraNode"
+                },
+                {
+                  "name": "right",
+                  "type": "AlgebraNode"
+                }
+              ],
+              "name": "Product",
+              "type": "record"
+            }
+          ]
+        }
+      ],
+      "name": "AlgebraNode",
+      "type": "record"
+    },
+    {
+      "fields": [
+        {
+          "name": "protocol_version",
+          "type": "int"
+        },
+        {
+          "name": "root",
+          "type": "AlgebraNode"
+        }
+      ],
+      "name": "OptimizeRequest",
+      "type": "record"
+    },
+    {
+      "fields": [
+        {
+          "name": "protocol_version",
+          "type": "int"
+        },
+        {
+          "name": "root",
+          "type": "AlgebraNode"
+        }
+      ],
+      "name": "OptimizeResponse",
+      "type": "record"
+    }
+  ]
+}
