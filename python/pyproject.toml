@@ -10,3 +10,8 @@ dependencies = [
     "avro>=1.12.2",
     "pydantic>=2.14.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
