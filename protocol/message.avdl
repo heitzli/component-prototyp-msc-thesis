@@ -1,7 +1,7 @@
 namespace common;
 
 schema Message;
-
+// todo add sequence id
 record Message {
   string source;
   string destination;

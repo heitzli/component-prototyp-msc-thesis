@@ -1,0 +1,78 @@
+{
+  "fields": [
+    {
+      "name": "node",
+      "type": [
+        {
+          "fields": [
+            {
+              "name": "table",
+              "type": "string"
+            },
+            {
+              "default": null,
+              "name": "alias",
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          ],
+          "name": "TableScan",
+          "type": "record"
+        },
+        {
+          "fields": [
+            {
+              "name": "columns",
+              "type": {
+                "items": {
+                  "fields": [
+                    {
+                      "name": "table",
+                      "type": "string"
+                    },
+                    {
+                      "name": "name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "type",
+                      "type": "string"
+                    }
+                  ],
+                  "name": "ResolvedColumn",
+                  "type": "record"
+                },
+                "type": "array"
+              }
+            },
+            {
+              "name": "child",
+              "type": "AlgebraNode"
+            }
+          ],
+          "name": "Projection",
+          "type": "record"
+        },
+        {
+          "fields": [
+            {
+              "name": "left",
+              "type": "AlgebraNode"
+            },
+            {
+              "name": "right",
+              "type": "AlgebraNode"
+            }
+          ],
+          "name": "Product",
+          "type": "record"
+        }
+      ]
+    }
+  ],
+  "name": "AlgebraNode",
+  "namespace": "algebra",
+  "type": "record"
+}

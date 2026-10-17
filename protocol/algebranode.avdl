@@ -1,0 +1,31 @@
+schema algebra.AlgebraNode;
+
+@namespace("algebra")
+record ResolvedColumn {
+    string table;
+    string name;
+    string type;
+}
+
+@namespace("algebra")
+record AlgebraNode {
+    union { TableScan, Projection, Product } node;
+}
+
+@namespace("algebra")
+record TableScan {
+    string table;
+    string? alias = null;
+}
+
+@namespace("algebra")
+record Projection {
+    array<ResolvedColumn> columns;
+    AlgebraNode child;
+}
+
+@namespace("algebra")
+record Product {
+    AlgebraNode left;
+    AlgebraNode right;
+}

@@ -1,0 +1,17 @@
+@namespace("algebra")
+protocol AlgebraPlan {
+
+    import idl "algebranode.avdl";
+
+    record OptimizeRequest {
+        // int protocol_version;
+        AlgebraNode root;
+    }
+
+    record OptimizeResponse {
+        // int protocol_version;
+        AlgebraNode root;
+    }
+
+    OptimizeResponse optimize(OptimizeRequest request);
+}

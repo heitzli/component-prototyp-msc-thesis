@@ -16,7 +16,7 @@
     {
       "fields": [
         {
-          "name": "relation_id",
+          "name": "table",
           "type": "string"
         },
         {
@@ -38,10 +38,6 @@
           "type": [
             {
               "fields": [
-                {
-                  "name": "relation_id",
-                  "type": "string"
-                },
                 {
                   "name": "table",
                   "type": "string"
@@ -98,10 +94,6 @@
     {
       "fields": [
         {
-          "name": "protocol_version",
-          "type": "int"
-        },
-        {
           "name": "root",
           "type": "AlgebraNode"
         }
@@ -111,10 +103,6 @@
     },
     {
       "fields": [
-        {
-          "name": "protocol_version",
-          "type": "int"
-        },
         {
           "name": "root",
           "type": "AlgebraNode"

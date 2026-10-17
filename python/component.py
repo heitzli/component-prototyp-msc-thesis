@@ -30,6 +30,7 @@ from message_codec import (
 
 # TODO: how to handle different protocol sources?
 # TODO: connection are closed after succ. rpc call, check how to create long lived connections maybe
+# TODO look at work stealing queues in python -> python queue is mpmc
 
 
 @dataclass
