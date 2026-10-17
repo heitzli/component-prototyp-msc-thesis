@@ -69,6 +69,12 @@ test_queries_serde = [
     ("Select e.name From employees as e WHERE e.name = 'John'", False),
     ("Select e.name From employees as e WHERE e.name != 'John'", False),
     ("Select e.name From employees as e WHERE e.name <> 'John'", False),
+    # TODO: this only works at the moment due to type coercion in comparison between float and int
+    # for some reason the deserialized value is a float not int, maybe need to keep type information with the inserts
+    (
+        "BEGIN TRANSACTION INSERT INTO employees (id, name, salary) VALUES (1, 'John', 50000), (2, 'Mary', 100000) COMMIT;",
+        False,
+    ),
 ]
 
 

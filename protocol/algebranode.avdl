@@ -14,7 +14,13 @@ record ResolvedColumn {
 
 @namespace("algebra")
 record AlgebraNode {
-    union { TableScan, Projection, Product, Selection, TransactionNode } node;
+    union { TableScan, Projection, Product, Selection, TransactionNode, InsertNode } node;
+}
+
+@namespace("algebra")
+record InsertNode {
+  string table;
+  array<array<Literal>> values;
 }
 
 @namespace("algebra")

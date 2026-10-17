@@ -189,6 +189,26 @@
           ],
           "name": "TransactionNode",
           "type": "record"
+        },
+        {
+          "fields": [
+            {
+              "name": "table",
+              "type": "string"
+            },
+            {
+              "name": "values",
+              "type": {
+                "items": {
+                  "items": "Literal",
+                  "type": "array"
+                },
+                "type": "array"
+              }
+            }
+          ],
+          "name": "InsertNode",
+          "type": "record"
         }
       ]
     }

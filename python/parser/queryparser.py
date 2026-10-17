@@ -209,6 +209,8 @@ def to_avro_node(node: AbstractAlgebraNode) -> dict:
     elif isinstance(node, Transaction):
         branch = {"name": node.name, "statements": to_avro_node(node.statements), "end": node.end}
 
+    elif isinstance(node, InsertNode):
+        branch = {"table": node.table, "values": [list([{"value": vv} for vv in v]) for v in node.values]}
     else:
         raise ValueError(f"Unsupported algebra node: {type(node).__name__}")
 
@@ -240,6 +242,11 @@ def from_avro_node(data: dict) -> AbstractAlgebraNode:
 
     elif "statements" in branch and "end" in branch:
         return Transaction(name=branch.get("name"), statements=from_avro_node(branch["statements"]), end=branch["end"])
+
+    elif "table" and "values" in branch:
+        return InsertNode(
+            table=branch.get("table"), values=[tuple([vv.get("value") for vv in v]) for v in branch.get("values")]
+        )
 
     else:
         raise ValueError(f"Unsupported Avro AlgebraNode representation: {branch!r}")
@@ -709,7 +716,7 @@ if __name__ == "__main__":
 
     # print(plan)
     plan.print_tree(indent=1)
-    """
+
     with open("../../protocol/algebranode.avsc") as f:
         schema = avro.schema.parse(f.read())
 
@@ -731,4 +738,3 @@ if __name__ == "__main__":
     deserialized = from_avro_node(res)  # type: ignore
     deserialized.print_tree(indent=1)
     # print(compile_sql("SELECT missing FROM employees;"))
-    """
