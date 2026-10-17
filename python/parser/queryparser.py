@@ -119,6 +119,18 @@ class TableScan(AbstractAlgebraNode):
         return f"TableScan({self.table})"
 
 
+class InsertNode(AbstractAlgebraNode):
+    kind: Literal["Insert"] = "Insert"
+    table: str
+    values: list[tuple[AllowedValue, ...]]
+
+    def children(self) -> list[AbstractAlgebraNode]:
+        return []
+
+    def label(self) -> str:
+        return f"Insert(table={self.table}, values={self.values}"
+
+
 # σ for selection, π for projection
 
 
@@ -321,10 +333,20 @@ class UnresolvedQuery(BaseModel):
     where: Expr | None = None
 
 
+class UnresolvedInsert(BaseModel):
+    columns: list[ColumnRef]
+    values: list[tuple[AllowedValue, ...]]
+
+
+class ResolvedInsert(BaseModel):
+    columns: list[ResolvedColumn]
+    values: list[tuple[AllowedValue, ...]]
+
+
 class UnresolvedTransaction(BaseModel):
     tx_name: str | None = None
     # TODO: For the moment single dql query, in the future need to support multiple statements
-    statements: UnresolvedQuery
+    statements: UnresolvedQuery | UnresolvedInsert
     tx_end: Literal["COMMIT"] | Literal["ROLLBACK"]
 
 
@@ -345,7 +367,7 @@ class ResolvedQuery(BaseModel):
 class ResolvedTransaction(BaseModel):
     tx_name: str | None = None
     # TODO: For the moment single dql query, in the future need to support multiple statements
-    statements: ResolvedQuery
+    statements: ResolvedQuery | ResolvedInsert
     tx_end: Literal["COMMIT"] | Literal["ROLLBACK"]
 
 
@@ -374,7 +396,36 @@ class SyntaxExtractor(SchofSQLVisitor):
         if ctx.tx():
             return self.visit(ctx.tx())  # type: ignore
 
+        if ctx.insert():
+            return self.visit(tree=ctx.insert())  # type: ignore
+
         raise ValueError("Unsupported query")
+
+    def visitInsert(self, ctx: SchofSQLParser.InsertContext):
+        return UnresolvedInsert(columns=self.visit(ctx.selectList()), values=self.visit(ctx.insertList()))
+
+    def visitInsertList(self, ctx: SchofSQLParser.InsertListContext):
+        return [self.visit(item) for item in ctx.insertTuple()]
+
+    def visitInsertTuple(self, ctx: SchofSQLParser.InsertTupleContext):
+        return tuple(self.visit(item) for item in ctx.insertValue())
+
+    def visitInsertValue(self, ctx: SchofSQLParser.InsertValueContext):
+        return self.visit(ctx.valueInsert())
+
+    def visitValueInsert(self, ctx: SchofSQLParser.ValueInsertContext):
+        if ctx.STRING():
+            # SQL escapes a quote by doubling it: 'it''s'
+            return str(ctx.STRING().getText()[1:-1].replace("''", "'"))  # type: ignore
+
+        if ctx.NUMBER():
+            text = ctx.NUMBER().getText()  # type: ignore
+            return float(text) if "." in text else int(text)
+
+        if ctx.NULL():
+            return None
+
+        raise ValueError(f"Unsupported value: {ctx.getText()}")
 
     def visitDql(self, ctx: SchofSQLParser.DqlContext) -> UnresolvedQuery:  # type: ignore
         return UnresolvedQuery(
@@ -384,7 +435,13 @@ class SyntaxExtractor(SchofSQLVisitor):
         )
 
     def visitTx(self, ctx: SchofSQLParser.TxContext) -> UnresolvedTransaction:  # type:ignore
-        query: UnresolvedQuery = self.visit(ctx.dql())  # type: ignore
+
+        if ctx.dql():
+            query: UnresolvedQuery = self.visit(ctx.dql())  # type: ignore
+        elif ctx.insert():
+            query: UnresolvedInsert = self.visit(ctx.insert())  # type: ignore
+        else:
+            raise ValueError("Transaction must contain a supported query")
 
         return UnresolvedTransaction(  # type: ignore
             tx_name=ctx.txName().getText() if ctx.txName() else None,  # type: ignore
@@ -490,7 +547,7 @@ def parse_sql(sql: str) -> UnresolvedQuery:
     try:
         tree = parser.query()
     except SQLSyntaxError as e:
-        print(f"Invalid SQL: {e}")
+        raise ValueError(f"Invalid SQL: {e}")
 
     return SyntaxExtractor().visit(tree)  # type:ignore
 
@@ -499,49 +556,60 @@ def parse_sql(sql: str) -> UnresolvedQuery:
 # TODO this should communicate with the catalog in the future
 # TODO add custom errors in the future that are returned to the client
 # TODO also need to add type compatibility, alias resolution and scopes for full support
-def analyze(query: UnresolvedQuery) -> ResolvedQuery:
-    scope = {}
+# HACK: not nice with two output types, find better way
+def analyze(query: UnresolvedQuery | UnresolvedInsert) -> ResolvedQuery | ResolvedInsert:
+    if isinstance(query, UnresolvedQuery):
+        scope = {}
 
-    # Register tables and aliases.
-    for table_ref in query.tables:
-        table_name = table_ref.name.lower()
-        if table_name not in CATALOG:
-            raise ValueError(f"Unknown table: {table_ref.name}")
-        qualifier = (table_ref.alias or table_ref.name).lower()
-        if qualifier in scope:
-            raise ValueError(f"Duplicate table alias: {qualifier}")
-        scope[qualifier] = (table_name, CATALOG[table_name])
-    resolved_columns = []
+        # Register tables and aliases.
+        for table_ref in query.tables:
+            table_name = table_ref.name.lower()
+            if table_name not in CATALOG:
+                raise ValueError(f"Unknown table: {table_ref.name}")
+            qualifier = (table_ref.alias or table_ref.name).lower()
+            if qualifier in scope:
+                raise ValueError(f"Duplicate table alias: {qualifier}")
+            scope[qualifier] = (table_name, CATALOG[table_name])
+        resolved_columns = []
 
-    for col in query.columns:
-        name = col.name.lower()
-        if col.qualifier:
-            qualifier = col.qualifier.lower()
-            if qualifier not in scope:
-                raise ValueError(f"Unknown table or alias: {col.qualifier}")
-            table_name, schema = scope[qualifier]
-            if name not in schema:
-                raise ValueError(f"Unknown column: {col.qualifier}.{col.name}")
-            resolved_columns.append(ResolvedColumn(table=table_name, name=name, type=schema[name]))
+        for col in query.columns:
+            name = col.name.lower()
+            if col.qualifier:
+                qualifier = col.qualifier.lower()
+                if qualifier not in scope:
+                    raise ValueError(f"Unknown table or alias: {col.qualifier}")
+                table_name, schema = scope[qualifier]
+                if name not in schema:
+                    raise ValueError(f"Unknown column: {col.qualifier}.{col.name}")
+                resolved_columns.append(ResolvedColumn(table=table_name, name=name, type=schema[name]))
 
-        else:
-            # An unqualified column must resolve uniquely.
-            matches = [(table_name, schema[name]) for table_name, schema in scope.values() if name in schema]
-            if not matches:
-                raise ValueError(f"Unknown column: {col.name}")
-            if len(matches) > 1:
-                raise ValueError(f"Ambiguous column: {col.name}")
-            table_name, column_type = matches[0]
-            resolved_columns.append(ResolvedColumn(table=table_name, name=name, type=column_type))
+            else:
+                # An unqualified column must resolve uniquely.
+                matches = [(table_name, schema[name]) for table_name, schema in scope.values() if name in schema]
+                if not matches:
+                    raise ValueError(f"Unknown column: {col.name}")
+                if len(matches) > 1:
+                    raise ValueError(f"Ambiguous column: {col.name}")
+                table_name, column_type = matches[0]
+                resolved_columns.append(ResolvedColumn(table=table_name, name=name, type=column_type))
 
-    return ResolvedQuery(
-        columns=resolved_columns,
-        tables=query.tables,
-        where=query.where,  # TODO: currently where not validated
-    )
+        return ResolvedQuery(
+            columns=resolved_columns,
+            tables=query.tables,
+            where=query.where,  # TODO: currently where not validated
+        )
+
+    if isinstance(query, UnresolvedInsert):
+        # HACK: currently not checking just return as is
+        return ResolvedInsert(
+            values=query.values,
+            columns=[ResolvedColumn(table="TODO", name=c.name, type="TODO") for c in query.columns],
+        )
 
 
-def analyze_query(query: UnresolvedQuery | UnresolvedTransaction) -> ResolvedQuery | ResolvedTransaction:
+def analyze_query(
+    query: UnresolvedQuery | UnresolvedTransaction | UnresolvedInsert,
+) -> ResolvedQuery | ResolvedTransaction:
     if isinstance(query, UnresolvedQuery):
         return analyze(query=query)
 
@@ -557,34 +625,38 @@ def analyze_query(query: UnresolvedQuery | UnresolvedTransaction) -> ResolvedQue
 # Stage 4: Translate resolved query to relational algebra
 # TODO this should be recursive, check master project for how impl done there
 # TODO: Check Algebrabuilder and translate that logic to here, this should happen in resolved query also
-def translate(query: ResolvedQuery):
-    relations = [
-        TableScan(
-            table=table.name.lower(),
-            alias=table.alias,
-        )
-        for table in query.tables
-    ]
+def translate(query: ResolvedQuery | ResolvedInsert):
+    if isinstance(query, ResolvedQuery):
+        relations = [
+            TableScan(
+                table=table.name.lower(),
+                alias=table.alias,
+            )
+            for table in query.tables
+        ]
 
-    if not relations:
-        raise ValueError("Query must reference at least one table")
+        if not relations:
+            raise ValueError("Query must reference at least one table")
 
-    source = relations[0]
+        source = relations[0]
 
-    for relation in relations[1:]:
-        source = Product(left=source, right=relation)
+        for relation in relations[1:]:
+            source = Product(left=source, right=relation)
 
-    # Apply WHERE before projection
-    if query.where is not None:
-        source = Selection(
-            expr=query.where,
+        # Apply WHERE before projection
+        if query.where is not None:
+            source = Selection(
+                expr=query.where,
+                child=source,
+            )
+
+        return Projection(
+            columns=tuple(query.columns),
             child=source,
         )
-
-    return Projection(
-        columns=tuple(query.columns),
-        child=source,
-    )
+    if isinstance(query, ResolvedInsert):
+        # HACK get the table properly
+        return InsertNode(table=query.columns[0].table, values=query.values)
 
 
 def translate_query(query: ResolvedQuery | ResolvedTransaction) -> Transaction:
@@ -631,19 +703,13 @@ def compile_sql(sql: str) -> Transaction:
 if __name__ == "__main__":
     plan = compile_sql(
         sql="""
-        BEGIN TRANSACTION txtest
-
-        SELECT e.name, d.id
-        FROM employees e, departments d
-        WHERE e.name = d.id AND e.salary >=50000
-
-        COMMIT;
+        BEGIN TRANSACTION INSERT INTO employees (id, name, salary) VALUES (1, 'John', 50000), (2, 'Mary', 100000) COMMIT;
         """
     )
 
-    print(plan)
+    # print(plan)
     plan.print_tree(indent=1)
-
+    """
     with open("../../protocol/algebranode.avsc") as f:
         schema = avro.schema.parse(f.read())
 
@@ -665,3 +731,4 @@ if __name__ == "__main__":
     deserialized = from_avro_node(res)  # type: ignore
     deserialized.print_tree(indent=1)
     # print(compile_sql("SELECT missing FROM employees;"))
+    """

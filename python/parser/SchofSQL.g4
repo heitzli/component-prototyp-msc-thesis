@@ -1,20 +1,26 @@
 grammar SchofSQL;
 
 
-
 dql
     : SELECT selectList FROM tableList whereClause? SEMI?
     ;
 
-
-// TODO: currently tx only allows single dql query, int the future add ddl, dml and dql
+// TODO check if selectlist ok or need own defined
+insert
+    : INSERT INTO table=ID LPAREN selectList RPAREN VALUES insertList SEMI?
+    ;
+// TODO: currently tx only allows single dql or insert query, int the future add ddl, dml and dql and multiple per tx
 // NOTE: For the moment do not support nested queries
 tx 
-    : BEGIN TRANSACTION txName? dql txEnd SEMI? EOF 
+    : BEGIN TRANSACTION txName? (dql | insert) txEnd SEMI? EOF 
     ;
 
 query 
-    : dql EOF | tx
+    : insert EOF | dql EOF | tx
+    ;
+
+insertList
+    : insertTuple (COMMA insertTuple)*
     ;
 
 selectList
@@ -24,6 +30,11 @@ selectList
 tableList
     : tableRef (COMMA tableRef)*
     ;
+
+insertTuple
+    : LPAREN insertValue (COMMA insertValue)* RPAREN
+    ;
+
 
 whereClause
     : WHERE expression
@@ -57,6 +68,16 @@ comparisonOperator
     | GTE
     ;
 
+valueInsert
+    : STRING
+    | NUMBER
+    | NULL
+    ;
+
+insertValue
+    :   val=valueInsert
+    ;
+
 columnRef
     : (table=ID DOT)? column=ID
     ;
@@ -84,6 +105,9 @@ BEGIN  : [bB][eE][gG][iI][nN];
 TRANSACTION : [tT][rR][aA][nN][sS][aA][cC][tT][iI][oO][nN];
 COMMIT : [cC][oO][mM][mM][iI][tT];
 ROLLBACK : [rR][oO][lL][lL][bB][aA][cC][kK];
+INSERT : [iI][nN][sS][eE][rR][tT];
+INTO   : [iI][nN][tT][oO];
+VALUES : [vV][aA][lL][uU][eE][sS];
 
 EQ     : '=';
 NEQ    : '<>' | '!=';

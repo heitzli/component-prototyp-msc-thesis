@@ -62,6 +62,9 @@ test_queries_serde = [
         "BEGIN TRANSACTION SELECT e.name, d.id FROM employees e, departments d WHERE e.name = d.id AND NOT (e.salary >=50000) COMMIT;",
         False,
     ),
+    ("Select e.name From employees as e WHERE e.name = 'John'", False),
+    ("Select e.name From employees as e WHERE e.name != 'John'", False),
+    ("Select e.name From employees as e WHERE e.name <> 'John'", False),
 ]
 
 
