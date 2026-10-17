@@ -1,6 +1,11 @@
 schema algebra.AlgebraNode;
 
 @namespace("algebra")
+enum TxEnd {
+  COMMIT, ROLLBACK
+} = COMMIT;
+
+@namespace("algebra")
 record ResolvedColumn {
     string table;
     string name;
@@ -9,7 +14,14 @@ record ResolvedColumn {
 
 @namespace("algebra")
 record AlgebraNode {
-    union { TableScan, Projection, Product } node;
+    union { TableScan, Projection, Product, Selection, TransactionNode } node;
+}
+
+@namespace("algebra")
+record TransactionNode {
+    string? name = null;
+    AlgebraNode statements; //TODO this will be an array in the future
+    TxEnd end;
 }
 
 @namespace("algebra")
@@ -28,4 +40,40 @@ record Projection {
 record Product {
     AlgebraNode left;
     AlgebraNode right;
+}
+
+@namespace("algebra")
+record Selection {
+    AlgebraNode child;
+    Expr expr;
+}
+
+@namespace("algebra")
+record Expr {
+  union {Literal, BinOp, UnOp, ColumnRef} expr;
+}
+
+@namespace("algebra")
+record ColumnRef {
+  string name;
+  string? qualifier = null;
+}
+
+@namespace("algebra")
+record Literal {
+  union {int, long, float, double, string, null} value;
+}
+
+
+@namespace("algebra")
+record BinOp {
+  string op;
+  Expr left;
+  Expr right;
+}
+
+@namespace("algebra")
+record UnOp {
+  string op;
+  Expr expr;
 }

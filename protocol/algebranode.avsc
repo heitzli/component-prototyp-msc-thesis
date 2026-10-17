@@ -68,6 +68,127 @@
           ],
           "name": "Product",
           "type": "record"
+        },
+        {
+          "fields": [
+            {
+              "name": "child",
+              "type": "AlgebraNode"
+            },
+            {
+              "name": "expr",
+              "type": {
+                "fields": [
+                  {
+                    "name": "expr",
+                    "type": [
+                      {
+                        "fields": [
+                          {
+                            "name": "value",
+                            "type": [
+                              "int",
+                              "long",
+                              "float",
+                              "double",
+                              "string",
+                              "null"
+                            ]
+                          }
+                        ],
+                        "name": "Literal",
+                        "type": "record"
+                      },
+                      {
+                        "fields": [
+                          {
+                            "name": "op",
+                            "type": "string"
+                          },
+                          {
+                            "name": "left",
+                            "type": "Expr"
+                          },
+                          {
+                            "name": "right",
+                            "type": "Expr"
+                          }
+                        ],
+                        "name": "BinOp",
+                        "type": "record"
+                      },
+                      {
+                        "fields": [
+                          {
+                            "name": "op",
+                            "type": "string"
+                          },
+                          {
+                            "name": "expr",
+                            "type": "Expr"
+                          }
+                        ],
+                        "name": "UnOp",
+                        "type": "record"
+                      },
+                      {
+                        "fields": [
+                          {
+                            "name": "name",
+                            "type": "string"
+                          },
+                          {
+                            "default": null,
+                            "name": "qualifier",
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        ],
+                        "name": "ColumnRef",
+                        "type": "record"
+                      }
+                    ]
+                  }
+                ],
+                "name": "Expr",
+                "type": "record"
+              }
+            }
+          ],
+          "name": "Selection",
+          "type": "record"
+        },
+        {
+          "fields": [
+            {
+              "default": null,
+              "name": "name",
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            {
+              "name": "statements",
+              "type": "AlgebraNode"
+            },
+            {
+              "name": "end",
+              "type": {
+                "default": "COMMIT",
+                "name": "TxEnd",
+                "symbols": [
+                  "COMMIT",
+                  "ROLLBACK"
+                ],
+                "type": "enum"
+              }
+            }
+          ],
+          "name": "TransactionNode",
+          "type": "record"
         }
       ]
     }
