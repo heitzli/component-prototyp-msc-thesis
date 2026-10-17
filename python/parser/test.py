@@ -40,6 +40,10 @@ test_queries_translator = [
         "BEGIN TRANSACTION SELECT e.name, d.id FROM employees e, departments d WHERE e.name = d.id AND NOT (e.salary >=50000) COMMIT;",
         False,
     ),
+    (
+        "BEGIN TRANSACTION INSERT INTO employees (id, name, salary) VALUES (1, 'John', 50000), (2, 'Mary', 100000) COMMIT;",
+        False,
+    ),
 ]
 
 
