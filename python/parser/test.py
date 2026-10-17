@@ -1,18 +1,36 @@
 from __future__ import annotations
 
 import io
-import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, TypeAlias
 
 import avro.io
 import avro.schema
 from antlr4 import CommonTokenStream, InputStream
+from antlr4.error.ErrorListener import ErrorListener
 from generated.SchofSQLLexer import SchofSQLLexer
 from generated.SchofSQLParser import SchofSQLParser
 from generated.SchofSQLVisitor import SchofSQLVisitor
 from pydantic import BaseModel, ConfigDict
+
+
+class SQLSyntaxError(Exception):
+    pass
+
+
+class RaisingErrorListener(ErrorListener):
+    def syntaxError(
+        self,
+        recognizer,
+        offendingSymbol,
+        line,
+        column,
+        msg,
+        e,
+    ):
+        raise SQLSyntaxError(f"Syntax error at line {line}, column {column}: {msg}")
+
 
 """
 Overall Idea of Query Processing:
@@ -96,6 +114,18 @@ class Projection(AbstractAlgebraNode):
         return f"π[{projection_str}]"
 
 
+class Selection(AbstractAlgebraNode):
+    kind: Literal["Selection"] = "Selection"
+    expr: Expr
+    child: AbstractAlgebraNode
+
+    def children(self) -> list[AbstractAlgebraNode]:
+        return [self.child]
+
+    def label(self) -> str:
+        return f"σ[{pretty(self.expr)}]"
+
+
 class Product(AbstractAlgebraNode):
     kind: Literal["Product"] = "Product"
     left: AbstractAlgebraNode
@@ -169,14 +199,55 @@ def from_avro_node(data: dict) -> AbstractAlgebraNode:
 # Stage 3: Logical representations (independent of ANTLR)
 
 
-@dataclass(frozen=True)
-class ColumnRef(BaseModel):
+AllowedValue: TypeAlias = str | int | float | None
+
+
+class Expr(BaseModel, ABC):
+    model_config = ConfigDict(frozen=True)
+
+
+def pretty(expr: Expr) -> str:
+    if isinstance(expr, ColumnRef):
+        return str(expr)
+
+    if isinstance(expr, LiteralExpr):
+        return repr(expr.value)
+
+    if isinstance(expr, BinOp):
+        return f"({pretty(expr.left)} {expr.op} {pretty(expr.right)})"
+
+    if isinstance(expr, UnOp):
+        return f"({expr.op} {pretty(expr.expr)})"
+
+    raise TypeError(f"Unknown expression type: {type(expr).__name__}")
+
+
+class ColumnRef(Expr):
     name: str
     qualifier: str | None = None
 
+    def __str__(self) -> str:
+        if self.qualifier:
+            return f"{self.qualifier}.{self.name}"
+        return self.name
 
-@dataclass(frozen=True)
-class TableRef(BaseModel):
+
+class LiteralExpr(Expr):
+    value: AllowedValue
+
+
+class BinOp(Expr):
+    op: str
+    left: Expr
+    right: Expr
+
+
+class UnOp(Expr):
+    op: str
+    expr: Expr
+
+
+class TableRef(Expr):
     name: str
     alias: str | None = None
 
@@ -185,6 +256,7 @@ class TableRef(BaseModel):
 class UnresolvedQuery(BaseModel):
     columns: list[ColumnRef]
     tables: list[TableRef]
+    where: Expr | None = None
 
 
 @dataclass(frozen=True)
@@ -198,6 +270,7 @@ class ResolvedColumn(BaseModel):
 class ResolvedQuery(BaseModel):
     columns: list[ResolvedColumn]
     tables: list[TableRef]
+    where: Expr | None = None
 
 
 # TODO move this to catalog component
@@ -218,40 +291,109 @@ CATALOG = {
 
 # Stage 1: Parse SQL, then extract its syntax
 class SyntaxExtractor(SchofSQLVisitor):
-    def visitQuery(self, ctx: SchofSQLParser.QueryContext):
+    def visitQuery(self, ctx: SchofSQLParser.QueryContext):  # type: ignore
         return UnresolvedQuery(
-            columns=self.visit(ctx.selectList()),
-            tables=self.visit(ctx.tableList()),
+            columns=self.visit(ctx.selectList()),  # type: ignore
+            tables=self.visit(ctx.tableList()),  # type: ignore
+            where=self.visit(ctx.whereClause()) if ctx.whereClause() else None,  # type: ignore
         )
 
-    def visitSelectList(self, ctx: SchofSQLParser.QueryContext):
-        return [self.visit(c) for c in ctx.columnRef()]
+    def visitSelectList(self, ctx: SchofSQLParser.SelectListContext):  # type: ignore
+        # print("Select list:", ctx.getText())
+        # print("Column refs:", ctx.columnRef())
+        # result = [self.visit(c) for c in ctx.columnRef()]
+        # print("Parsed columns:", result)
+        return [self.visit(item) for item in ctx.columnRef()]  # type: ignore
 
-    def visitTableList(self, ctx: SchofSQLParser.QueryContext):
-        return [self.visit(t) for t in ctx.tableRef()]
+    def visitColumnRef(self, ctx: SchofSQLParser.ColumnRefContext) -> ColumnRef:  # type: ignore
+        return ColumnRef(
+            name=ctx.column.text,  # type: ignore
+            qualifier=ctx.table.text if ctx.table else None,
+        )
 
-    def visitColumnRef(self, ctx: SchofSQLParser.QueryContext):
+    def visitTableList(self, ctx: SchofSQLParser.TableListContext):  # type: ignore
+        return [self.visit(t) for t in ctx.tableRef()]  # type: ignore
+
+    def visitColumnItem(self, ctx: SchofSQLParser.ColumnItemContext):  # type: ignore
         return ColumnRef(
             name=ctx.column.text,
             qualifier=ctx.table.text if ctx.table else None,
         )
 
-    def visitTableRef(self, ctx: SchofSQLParser.QueryContext):
+    def visitTableRef(self, ctx: SchofSQLParser.TableRefContext):  # type: ignore
         return TableRef(
-            name=ctx.name.text,
+            name=ctx.name.text,  # type: ignore
             alias=ctx.alias.text if ctx.alias else None,
         )
+
+    def visitWhereClause(self, ctx: SchofSQLParser.WhereClauseContext):
+        return self.visit(ctx.expression())  # type: ignore
+
+    def visitComparisonExpression(  # type: ignore
+        self,
+        ctx: SchofSQLParser.ComparisonExpressionContext,
+    ):
+        return BinOp(  # type: ignore
+            left=self.visit(ctx.operand(0)),  # type: ignore
+            op=ctx.comparisonOperator().getText(),  # type: ignore
+            right=self.visit(ctx.operand(1)),  # type: ignore
+        )
+
+    def visitColumnOperand(self, ctx: SchofSQLParser.ColumnOperandContext):  # type: ignore
+        return ColumnRef(
+            name=ctx.column.text,  # type: ignore
+            qualifier=ctx.table.text if ctx.table else None,
+        )
+
+    def visitValueOperand(self, ctx: SchofSQLParser.ValueOperandContext):
+        return self.visit(ctx.value())  # type: ignore
+
+    def visitAndExpression(self, ctx: SchofSQLParser.AndExpressionContext):  # type: ignore
+        return BinOp(  # type: ignore
+            op="AND",
+            left=self.visit(ctx.expression(0)),  # type: ignore
+            right=self.visit(ctx.expression(1)),  # type: ignore
+        )
+
+    def visitOrExpression(self, ctx: SchofSQLParser.OrExpressionContext):  # type: ignore
+        return BinOp(  # type: ignore
+            op="OR",
+            left=self.visit(ctx.expression(0)),  # type: ignore
+            right=self.visit(ctx.expression(1)),  # type: ignore
+        )
+
+    def visitNotExpression(self, ctx: SchofSQLParser.NotExpressionContext):  # type: ignore
+        return UnOp(op="NOT", expression=self.visit(ctx.expression()))  # type: ignore
+
+    def visitParenExpression(self, ctx: SchofSQLParser.ParenExpressionContext):
+        return self.visit(ctx.expression())  # type: ignore
+
+    def visitValue(self, ctx: SchofSQLParser.ValueContext):  # type: ignore
+        if ctx.STRING():
+            # SQL escapes a quote by doubling it: 'it''s'
+            return LiteralExpr(value=ctx.STRING().getText()[1:-1].replace("''", "'"))  # type: ignore
+
+        if ctx.NUMBER():
+            text = ctx.NUMBER().getText()  # type: ignore
+            return LiteralExpr(value=float(text) if "." in text else int(text))
+
+        if ctx.NULL():
+            return LiteralExpr(value=None)
+
+        raise ValueError(f"Unsupported value: {ctx.getText()}")
 
 
 def parse_sql(sql: str) -> UnresolvedQuery:
     lexer = SchofSQLLexer(InputStream(sql))
     tokens = CommonTokenStream(lexer)
     parser = SchofSQLParser(tokens)
-
+    parser.removeErrorListeners()
+    parser.addErrorListener(RaisingErrorListener())
     # Do not proceed when ANTLR reports syntax errors.
-    tree = parser.query()
-    if parser.getNumberOfSyntaxErrors() > 0:
-        raise ValueError("Invalid SQL syntax")
+    try:
+        tree = parser.query()
+    except SQLSyntaxError as e:
+        print(f"Invalid SQL: {e}")
 
     return SyntaxExtractor().visit(tree)  # type:ignore
 
@@ -293,7 +435,13 @@ def analyze(query: UnresolvedQuery) -> ResolvedQuery:
             if name not in schema:
                 raise ValueError(f"Unknown column: {col.qualifier}.{col.name}")
 
-            resolved_columns.append(ResolvedColumn(table=table_name, name=name, type=schema[name]))
+            resolved_columns.append(
+                ResolvedColumn(
+                    table=table_name,
+                    name=name,
+                    type=schema[name],
+                )
+            )
 
         else:
             # An unqualified column must resolve uniquely.
@@ -306,21 +454,48 @@ def analyze(query: UnresolvedQuery) -> ResolvedQuery:
                 raise ValueError(f"Ambiguous column: {col.name}")
 
             table_name, column_type = matches[0]
-            resolved_columns.append(ResolvedColumn(table=table_name, name=name, type=column_type))
 
-    return ResolvedQuery(columns=resolved_columns, tables=query.tables)
+            resolved_columns.append(
+                ResolvedColumn(
+                    table=table_name,
+                    name=name,
+                    type=column_type,
+                )
+            )
+
+    return ResolvedQuery(
+        columns=resolved_columns,
+        tables=query.tables,
+        where=query.where,  # TODO: currently where not validated
+    )
 
 
 # Stage 4: Translate resolved query to relational algebra
 # TODO this should be recursive, check master project for how impl done there
 # TODO: Check Algebrabuilder and translate that logic to here, this should happen in resolved query also
 def translate(query: ResolvedQuery):
-    relations = [TableScan(table=table.name.lower()) for table in query.tables]
+    relations = [
+        TableScan(
+            table=table.name.lower(),
+            alias=table.alias,
+        )
+        for table in query.tables
+    ]
+
+    if not relations:
+        raise ValueError("Query must reference at least one table")
 
     source = relations[0]
 
     for relation in relations[1:]:
         source = Product(left=source, right=relation)
+
+    # Apply WHERE before projection
+    if query.where is not None:
+        source = Selection(
+            expr=query.where,
+            child=source,
+        )
 
     return Projection(
         columns=tuple(query.columns),
@@ -347,7 +522,7 @@ def compile_sql(sql: str):
     algebra = translate(resolved)
     # algebra.print_tree(indent=1)
     # optimized = optimize(algebra)
-    print(to_avro_node(algebra))
+    # print(to_avro_node(algebra))
 
     return algebra
 
@@ -358,7 +533,7 @@ def compile_sql(sql: str):
 # - DML (Insert, Update, Delete)
 
 if __name__ == "__main__":
-    plan = compile_sql("SELECT e.name, d.id FROM employees e, departments d")
+    plan = compile_sql("SELECT e.name, d.id FROM employees e, departments d WHERE e.name = d.id;")
 
     print(plan)
     plan.print_tree(indent=1)
@@ -381,6 +556,6 @@ if __name__ == "__main__":
     res = reader.read(decoder=avro.io.BinaryDecoder(data))
     print(res)
 
-    deserialized = from_avro_node(res)
+    deserialized = from_avro_node(res)  # type: ignore
     deserialized.print_tree(indent=1)
     # print(compile_sql("SELECT missing FROM employees;"))
