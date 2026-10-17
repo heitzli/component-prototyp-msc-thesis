@@ -1,4 +1,4 @@
-grammar SchofSQL;
+grammar UnibaSQL;
 
 
 dql
@@ -11,11 +11,11 @@ insert
     ;
 // TODO: currently tx only allows single dql or insert query, int the future add ddl, dml and dql and multiple per tx
 // NOTE: For the moment do not support nested queries
-tx 
-    : BEGIN TRANSACTION txName? (dql | insert) txEnd SEMI? EOF 
+tx
+    : BEGIN TRANSACTION txName? (dql | insert) txEnd SEMI? EOF
     ;
 
-query 
+query
     : insert EOF | dql EOF | tx
     ;
 

@@ -9,9 +9,9 @@ import avro.io
 import avro.schema
 from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
-from generated.SchofSQLLexer import SchofSQLLexer
-from generated.SchofSQLParser import SchofSQLParser
-from generated.SchofSQLVisitor import SchofSQLVisitor
+from generated.UnibaSQLLexer import UnibaSQLLexer
+from generated.UnibaSQLParser import UnibaSQLParser
+from generated.UnibaSQLVisitor import UnibaSQLVisitor
 from pydantic import BaseModel, ConfigDict
 
 
@@ -395,8 +395,8 @@ CATALOG = {
 
 
 # Stage 1: Parse SQL, then extract its syntax
-class SyntaxExtractor(SchofSQLVisitor):
-    def visitQuery(self, ctx: SchofSQLParser.QueryContext) -> None:
+class SyntaxExtractor(UnibaSQLVisitor):
+    def visitQuery(self, ctx: UnibaSQLParser.QueryContext) -> None:
         if ctx.dql():
             return self.visit(ctx.dql())  # type: ignore
 
@@ -408,19 +408,19 @@ class SyntaxExtractor(SchofSQLVisitor):
 
         raise ValueError("Unsupported query")
 
-    def visitInsert(self, ctx: SchofSQLParser.InsertContext):
+    def visitInsert(self, ctx: UnibaSQLParser.InsertContext):
         return UnresolvedInsert(columns=self.visit(ctx.selectList()), values=self.visit(ctx.insertList()))
 
-    def visitInsertList(self, ctx: SchofSQLParser.InsertListContext):
+    def visitInsertList(self, ctx: UnibaSQLParser.InsertListContext):
         return [self.visit(item) for item in ctx.insertTuple()]
 
-    def visitInsertTuple(self, ctx: SchofSQLParser.InsertTupleContext):
+    def visitInsertTuple(self, ctx: UnibaSQLParser.InsertTupleContext):
         return tuple(self.visit(item) for item in ctx.insertValue())
 
-    def visitInsertValue(self, ctx: SchofSQLParser.InsertValueContext):
+    def visitInsertValue(self, ctx: UnibaSQLParser.InsertValueContext):
         return self.visit(ctx.valueInsert())
 
-    def visitValueInsert(self, ctx: SchofSQLParser.ValueInsertContext):
+    def visitValueInsert(self, ctx: UnibaSQLParser.ValueInsertContext):
         if ctx.STRING():
             # SQL escapes a quote by doubling it: 'it''s'
             return str(ctx.STRING().getText()[1:-1].replace("''", "'"))  # type: ignore
@@ -434,14 +434,14 @@ class SyntaxExtractor(SchofSQLVisitor):
 
         raise ValueError(f"Unsupported value: {ctx.getText()}")
 
-    def visitDql(self, ctx: SchofSQLParser.DqlContext) -> UnresolvedQuery:  # type: ignore
+    def visitDql(self, ctx: UnibaSQLParser.DqlContext) -> UnresolvedQuery:  # type: ignore
         return UnresolvedQuery(
             columns=self.visit(ctx.selectList()),  # type: ignore
             tables=self.visit(ctx.tableList()),  # type: ignore
             where=(self.visit(ctx.whereClause()) if ctx.whereClause() else None),  # type: ignore
         )
 
-    def visitTx(self, ctx: SchofSQLParser.TxContext) -> UnresolvedTransaction:  # type:ignore
+    def visitTx(self, ctx: UnibaSQLParser.TxContext) -> UnresolvedTransaction:  # type:ignore
 
         if ctx.dql():
             query: UnresolvedQuery = self.visit(ctx.dql())  # type: ignore
@@ -456,43 +456,43 @@ class SyntaxExtractor(SchofSQLVisitor):
             tx_end=self.visit(ctx.txEnd()),  # type: ignore
         )
 
-    def visitTxEnd(self, ctx: SchofSQLParser.TxEndContext) -> str:  # type: ignore
+    def visitTxEnd(self, ctx: UnibaSQLParser.TxEndContext) -> str:  # type: ignore
         return ctx.getText().upper()
 
-    def visitSelectList(self, ctx: SchofSQLParser.SelectListContext):  # type: ignore
+    def visitSelectList(self, ctx: UnibaSQLParser.SelectListContext):  # type: ignore
         # print("Select list:", ctx.getText())
         # print("Column refs:", ctx.columnRef())
         # result = [self.visit(c) for c in ctx.columnRef()]
         # print("Parsed columns:", result)
         return [self.visit(item) for item in ctx.columnRef()]  # type: ignore
 
-    def visitColumnRef(self, ctx: SchofSQLParser.ColumnRefContext) -> ColumnRef:  # type: ignore
+    def visitColumnRef(self, ctx: UnibaSQLParser.ColumnRefContext) -> ColumnRef:  # type: ignore
         return ColumnRef(
             name=ctx.column.text,  # type: ignore
             qualifier=ctx.table.text if ctx.table else None,
         )
 
-    def visitTableList(self, ctx: SchofSQLParser.TableListContext):  # type: ignore
+    def visitTableList(self, ctx: UnibaSQLParser.TableListContext):  # type: ignore
         return [self.visit(t) for t in ctx.tableRef()]  # type: ignore
 
-    def visitColumnItem(self, ctx: SchofSQLParser.ColumnItemContext) -> ColumnRef:  # type: ignore
+    def visitColumnItem(self, ctx: UnibaSQLParser.ColumnItemContext) -> ColumnRef:  # type: ignore
         return ColumnRef(
             name=ctx.column.text,
             qualifier=ctx.table.text if ctx.table else None,
         )
 
-    def visitTableRef(self, ctx: SchofSQLParser.TableRefContext) -> TableRef:  # type: ignore
+    def visitTableRef(self, ctx: UnibaSQLParser.TableRefContext) -> TableRef:  # type: ignore
         return TableRef(
             name=ctx.name.text,  # type: ignore
             alias=ctx.alias.text if ctx.alias else None,
         )
 
-    def visitWhereClause(self, ctx: SchofSQLParser.WhereClauseContext) -> None:
+    def visitWhereClause(self, ctx: UnibaSQLParser.WhereClauseContext) -> None:
         return self.visit(ctx.expression())  # type: ignore
 
     def visitComparisonExpression(  # type: ignore
         self,
-        ctx: SchofSQLParser.ComparisonExpressionContext,
+        ctx: UnibaSQLParser.ComparisonExpressionContext,
     ) -> BinOp:
         return BinOp(  # type: ignore
             left=self.visit(ctx.operand(0)),  # type: ignore
@@ -500,36 +500,36 @@ class SyntaxExtractor(SchofSQLVisitor):
             right=self.visit(ctx.operand(1)),  # type: ignore
         )
 
-    def visitColumnOperand(self, ctx: SchofSQLParser.ColumnOperandContext) -> ColumnRef:  # type: ignore
+    def visitColumnOperand(self, ctx: UnibaSQLParser.ColumnOperandContext) -> ColumnRef:  # type: ignore
         return ColumnRef(
             name=ctx.column.text,  # type: ignore
             qualifier=ctx.table.text if ctx.table else None,
         )
 
-    def visitValueOperand(self, ctx: SchofSQLParser.ValueOperandContext) -> None:
+    def visitValueOperand(self, ctx: UnibaSQLParser.ValueOperandContext) -> None:
         return self.visit(ctx.value())  # type: ignore
 
-    def visitAndExpression(self, ctx: SchofSQLParser.AndExpressionContext) -> BinOp:  # type: ignore
+    def visitAndExpression(self, ctx: UnibaSQLParser.AndExpressionContext) -> BinOp:  # type: ignore
         return BinOp(  # type: ignore
             op="AND",
             left=self.visit(ctx.expression(0)),  # type: ignore
             right=self.visit(ctx.expression(1)),  # type: ignore
         )
 
-    def visitOrExpression(self, ctx: SchofSQLParser.OrExpressionContext) -> BinOp:  # type: ignore
+    def visitOrExpression(self, ctx: UnibaSQLParser.OrExpressionContext) -> BinOp:  # type: ignore
         return BinOp(  # type: ignore
             op="OR",
             left=self.visit(ctx.expression(0)),  # type: ignore
             right=self.visit(ctx.expression(1)),  # type: ignore
         )
 
-    def visitNotExpression(self, ctx: SchofSQLParser.NotExpressionContext) -> UnOp:  # type: ignore
+    def visitNotExpression(self, ctx: UnibaSQLParser.NotExpressionContext) -> UnOp:  # type: ignore
         return UnOp(op="NOT", expr=self.visit(ctx.expression()))  # type: ignore
 
-    def visitParenExpression(self, ctx: SchofSQLParser.ParenExpressionContext) -> None:
+    def visitParenExpression(self, ctx: UnibaSQLParser.ParenExpressionContext) -> None:
         return self.visit(ctx.expression())  # type: ignore
 
-    def visitValue(self, ctx: SchofSQLParser.ValueContext) -> LiteralExpr:  # type: ignore
+    def visitValue(self, ctx: UnibaSQLParser.ValueContext) -> LiteralExpr:  # type: ignore
         if ctx.STRING():
             # SQL escapes a quote by doubling it: 'it''s'
             return LiteralExpr(value=ctx.STRING().getText()[1:-1].replace("''", "'"))  # type: ignore
@@ -545,9 +545,9 @@ class SyntaxExtractor(SchofSQLVisitor):
 
 
 def parse_sql(sql: str) -> UnresolvedQuery:
-    lexer = SchofSQLLexer(InputStream(sql))
+    lexer = UnibaSQLLexer(InputStream(sql))
     tokens = CommonTokenStream(lexer)
-    parser = SchofSQLParser(tokens)
+    parser = UnibaSQLParser(tokens)
     parser.removeErrorListeners()
     parser.addErrorListener(RaisingErrorListener())
     # Do not proceed when ANTLR reports syntax errors.
